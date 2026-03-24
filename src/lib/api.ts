@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const BASE_URL = 'https://moviex-flip.vercel.app';
 
 export interface Genre {
   name: string;
@@ -82,9 +82,20 @@ export interface StreamResponse {
   sources: StreamSource[];
 }
 
+// Check if we're on the server
+const isServer = typeof window === 'undefined';
+
 async function fetchAPI(endpoint: string) {
-  // Use the proxy API route
-  const res = await fetch(`/api/proxy?endpoint=${encodeURIComponent(endpoint)}`);
+  // When on server, call directly to avoid proxy overhead
+  // When on client, use the proxy to avoid CORS
+  const url = isServer 
+    ? `${BASE_URL}/${endpoint}`
+    : `/api/proxy?endpoint=${endpoint}`;
+    
+  const res = await fetch(url, {
+    next: { revalidate: 60 } // Cache for 60 seconds
+  });
+  
   if (!res.ok) {
     throw new Error(`API error: ${res.status}`);
   }
