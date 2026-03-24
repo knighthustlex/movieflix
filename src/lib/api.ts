@@ -1,4 +1,4 @@
-const BASE_URL = 'https://moviex-flip.vercel.app';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export interface Genre {
   name: string;
@@ -82,58 +82,57 @@ export interface StreamResponse {
   sources: StreamSource[];
 }
 
-export async function fetchHome(): Promise<HomeData> {
-  const res = await fetch(`${BASE_URL}/home`);
+async function fetchAPI(endpoint: string) {
+  // Use the proxy API route
+  const res = await fetch(`/api/proxy?endpoint=${encodeURIComponent(endpoint)}`);
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status}`);
+  }
   return res.json();
+}
+
+export async function fetchHome(): Promise<HomeData> {
+  return fetchAPI('home');
 }
 
 export async function searchMovies(query: string, page = 1): Promise<SearchResults> {
-  const res = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(query)}&page=${page}`);
-  return res.json();
+  return fetchAPI(`search?q=${encodeURIComponent(query)}&page=${page}`);
 }
 
 export async function getMovieDetail(slug: string): Promise<MovieDetail> {
-  const res = await fetch(`${BASE_URL}/movie/${slug}`);
-  return res.json();
+  return fetchAPI(`movie/${slug}`);
 }
 
 export async function getTvDetail(slug: string): Promise<MovieDetail> {
-  const res = await fetch(`${BASE_URL}/tv/${slug}`);
-  return res.json();
+  return fetchAPI(`tv/${slug}`);
 }
 
 export async function getGenre(genreSlug: string, page = 1): Promise<GenreResponse> {
-  const res = await fetch(`${BASE_URL}/genre/${genreSlug}?page=${page}`);
-  return res.json();
+  return fetchAPI(`genre/${genreSlug}?page=${page}`);
 }
 
 export async function getTrending(page = 1): Promise<ListResponse> {
-  const res = await fetch(`${BASE_URL}/trending?page=${page}`);
-  return res.json();
+  return fetchAPI(`trending?page=${page}`);
 }
 
 export async function getTopIMDb(page = 1): Promise<ListResponse> {
-  const res = await fetch(`${BASE_URL}/top-imdb?page=${page}`);
-  return res.json();
+  return fetchAPI(`top-imdb?page=${page}`);
 }
-// Alias for backwards compatibility
+
 export const getTopImdb = getTopIMDb;
 
 export async function getMovies(page = 1): Promise<ListResponse> {
-  const res = await fetch(`${BASE_URL}/movies?page=${page}`);
-  return res.json();
+  return fetchAPI(`movies?page=${page}`);
 }
 
 export async function getTvShows(page = 1): Promise<ListResponse> {
-  const res = await fetch(`${BASE_URL}/tv-shows?page=${page}`);
-  return res.json();
+  return fetchAPI(`tv-shows?page=${page}`);
 }
 
 export async function getStreamSources(type: 'movie' | 'tv', id: string, season?: number, episode?: number): Promise<StreamResponse> {
-  let url = `${BASE_URL}/stream/${type}/${id}`;
+  let endpoint = `stream/${type}/${id}`;
   if (type === 'tv' && season && episode) {
-    url += `/${season}/${episode}`;
+    endpoint += `/${season}/${episode}`;
   }
-  const res = await fetch(url);
-  return res.json();
+  return fetchAPI(endpoint);
 }
