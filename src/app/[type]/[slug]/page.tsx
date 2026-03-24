@@ -1,21 +1,87 @@
-import { getMovieDetail, getTvDetail, MovieDetail } from '@/lib/api';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 
-async function getDetail(type: string, slug: string) {
-  try {
-    const detail = type === 'tv' ? await getTvDetail(slug) : await getMovieDetail(slug);
-    return detail;
-  } catch (error) {
-    console.error('Failed to load:', error);
-    return null;
-  }
+const BASE_URL = 'https://moviex-flip.vercel.app';
+
+interface StreamSource {
+  name: string;
+  embed_url: string;
 }
 
-export default async function DetailPage({ params }: { params: Promise<{ type: string; slug: string }> }) {
-  const { type, slug } = await params;
-  const movie = await getDetail(type, slug);
+interface MovieDetail {
+  slug: string;
+  runtime: string;
+  stream_sources: StreamSource[];
+  backdrop: string;
+  title: string;
+  year: number;
+  type: string;
+  tmdb_id: string;
+  description: string;
+  flux_embed: string;
+}
 
-  if (!movie) {
+async function fetchAPI(endpoint: string) {
+  const res = await fetch(`/api/proxy?endpoint=${endpoint}`);
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export default function DetailPage() {
+  const params = useParams();
+  const type = params.type as string;
+  const slug = params.slug as string;
+  
+  const [movie, setMovie] = useState<MovieDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<StreamSource | null>(null);
+
+  useEffect(() => {
+    async function loadDetail() {
+      if (!type || !slug) return;
+      
+      setLoading(true);
+      try {
+        const detail = type === 'tv' 
+          ? await fetchAPI(`tv/${slug}`) 
+          : await fetchAPI(`movie/${slug}`);
+        
+        setMovie(detail);
+        
+        if (detail.stream_sources?.length > 0) {
+          setSelectedSource(detail.stream_sources[0]);
+        }
+      } catch (err) {
+        console.error('Failed to load:', err);
+        setError('Failed to load content');
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    loadDetail();
+  }, [type, slug]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black">
+        <div className="h-[60vh] skeleton" />
+        <div className="px-8 py-8 space-y-4">
+          <div className="h-12 w-96 skeleton rounded" />
+          <div className="h-6 w-64 skeleton rounded" />
+          <div className="h-32 w-full skeleton rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !movie) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
@@ -27,7 +93,6 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
   }
 
   const backdropUrl = movie.backdrop ? `https://image.tmdb.org/t/p/original${movie.backdrop}` : null;
-  const defaultSource = movie.stream_sources?.[0];
 
   return (
     <div className="min-h-screen bg-black">
@@ -73,22 +138,24 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
                   <>
                     <div className="flex flex-wrap gap-2 mb-4">
                       {movie.stream_sources.map((source, i) => (
-                        <a 
+                        <button 
                           key={i}
-                          href={source.embed_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-2 rounded-full text-sm font-medium bg-zinc-800 text-gray-300 hover:bg-red-600 hover:text-white transition-colors"
+                          onClick={() => setSelectedSource(source)}
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                            selectedSource?.name === source.name 
+                              ? 'bg-red-600 text-white' 
+                              : 'bg-zinc-800 text-gray-300 hover:bg-zinc-700'
+                          }`}
                         >
-                          {source.name} ▶
-                        </a>
+                          {source.name}
+                        </button>
                       ))}
                     </div>
                     
-                    {defaultSource && (
+                    {selectedSource && (
                       <div className="aspect-video w-full bg-black rounded-lg overflow-hidden">
                         <iframe 
-                          src={defaultSource.embed_url} 
+                          src={selectedSource.embed_url} 
                           className="w-full h-full" 
                           allowFullScreen 
                           allow="autoplay; fullscreen"
