@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 
-const BASE_URL = 'https://moviex-flip.vercel.app';
-
 interface StreamSource {
   name: string;
   embed_url: string;
@@ -22,13 +20,12 @@ interface MovieDetail {
   tmdb_id: string;
   description: string;
   flux_embed: string;
+  error?: string;
 }
 
 async function fetchAPI(endpoint: string) {
   const res = await fetch(`/api/proxy?endpoint=${endpoint}`);
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
-  }
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
@@ -41,21 +38,55 @@ export default function DetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<StreamSource | null>(null);
+  const [videoError, setVideoError] = useState(false);
 
   useEffect(() => {
     async function loadDetail() {
       if (!type || !slug) return;
       
       setLoading(true);
+      setError(null);
+      setVideoError(false);
+      
       try {
-        const detail = type === 'tv' 
-          ? await fetchAPI(`tv/${slug}`) 
-          : await fetchAPI(`movie/${slug}`);
+        // Determine the correct endpoint based on type
+        let endpoint: string;
+        if (type === 'tv') {
+          endpoint = `tv/${slug}`;
+        } else if (type === 'movie') {
+          endpoint = `movie/${slug}`;
+        } else {
+          // Try movie first, then tv
+          try {
+            const movieData = await fetchAPI(`movie/${slug}`);
+            if (movieData.stream_sources?.length > 0 || movieData.flux_embed) {
+              endpoint = `movie/${slug}`;
+            } else {
+              endpoint = `tv/${slug}`;
+            }
+          } catch {
+            endpoint = `movie/${slug}`;
+          }
+        }
+        
+        const detail = await fetchAPI(endpoint);
+        
+        if (detail.error) {
+          setError(detail.error);
+          return;
+        }
         
         setMovie(detail);
         
-        if (detail.stream_sources?.length > 0) {
+        // Set the first available stream source
+        if (detail.stream_sources && detail.stream_sources.length > 0) {
           setSelectedSource(detail.stream_sources[0]);
+        } else if (detail.flux_embed) {
+          // Fallback to flux_embed if no stream_sources
+          setSelectedSource({
+            name: 'Flux',
+            embed_url: detail.flux_embed
+          });
         }
       } catch (err) {
         console.error('Failed to load:', err);
@@ -85,7 +116,8 @@ export default function DetailPage() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl text-white mb-4">Content not found</h1>
+          <h1 className="text-2xl text-white mb-4">{error || 'Content not found'}</h1>
+          <p className="text-gray-400 mb-4">Slug: {slug}</p>
           <Link href="/" className="text-red-500 hover:underline">Go back home</Link>
         </div>
       </div>
@@ -93,12 +125,16 @@ export default function DetailPage() {
   }
 
   const backdropUrl = movie.backdrop ? `https://image.tmdb.org/t/p/original${movie.backdrop}` : null;
+  const hasSources = movie.stream_sources?.length > 0 || movie.flux_embed;
 
   return (
     <div className="min-h-screen bg-black">
       {/* Backdrop */}
       {backdropUrl && (
-        <div className="fixed inset-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${backdropUrl})` }} />
+        <div 
+          className="fixed inset-0 bg-cover bg-center opacity-30" 
+          style={{ backgroundImage: `url(${backdropUrl})` }} 
+        />
       )}
       <div className="fixed inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
       
@@ -112,7 +148,7 @@ export default function DetailPage() {
                 <img 
                   src={movie.backdrop ? `https://image.tmdb.org/t/p/w500${movie.backdrop}` : '/placeholder.jpg'} 
                   alt={movie.title} 
-                  className="w-full" 
+                  className="w-full"
                 />
               </div>
             </div>
@@ -130,42 +166,71 @@ export default function DetailPage() {
                 <p className="text-gray-300 mb-8 max-w-2xl">{movie.description}</p>
               )}
               
+              {/* Debug info - remove in production */}
+              <p className="text-gray-500 text-xs mb-4">Slug: {movie.slug}</p>
+              
               {/* Stream Sources */}
               <div className="mb-8">
                 <h3 className="text-xl font-semibold text-white mb-4">Watch Now</h3>
                 
-                {movie.stream_sources && movie.stream_sources.length > 0 ? (
+                {hasSources ? (
                   <>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {movie.stream_sources.map((source, i) => (
-                        <button 
-                          key={i}
-                          onClick={() => setSelectedSource(source)}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                            selectedSource?.name === source.name 
-                              ? 'bg-red-600 text-white' 
-                              : 'bg-zinc-800 text-gray-300 hover:bg-zinc-700'
-                          }`}
-                        >
-                          {source.name}
-                        </button>
-                      ))}
-                    </div>
-                    
-                    {selectedSource && (
-                      <div className="aspect-video w-full bg-black rounded-lg overflow-hidden">
-                        <iframe 
-                          src={selectedSource.embed_url} 
-                          className="w-full h-full" 
-                          allowFullScreen 
-                          allow="autoplay; fullscreen"
-                          title="Video Player"
-                        />
+                    {movie.stream_sources && movie.stream_sources.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {movie.stream_sources.map((source, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              setSelectedSource(source);
+                              setVideoError(false);
+                            }}
+                            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                              selectedSource?.name === source.name 
+                                ? 'bg-red-600 text-white' 
+                                : 'bg-zinc-800 text-gray-300 hover:bg-zinc-700'
+                            }`}
+                          >
+                            {source.name}
+                          </button>
+                        ))}
                       </div>
                     )}
+                    
+                    {selectedSource && (
+                      <div className="aspect-video w-full bg-black rounded-lg overflow-hidden relative">
+                        {videoError ? (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 text-center p-4">
+                            <p className="text-red-400 mb-2">Video failed to load</p>
+                            <p className="text-gray-500 text-sm mb-4">Source: {selectedSource.name}</p>
+                            <button 
+                              onClick={() => setVideoError(false)}
+                              className="text-red-500 hover:underline"
+                            >
+                              Try again
+                            </button>
+                          </div>
+                        ) : (
+                          <iframe
+                            src={selectedSource.embed_url}
+                            className="w-full h-full"
+                            allowFullScreen
+                            allow="autoplay; fullscreen; encrypted-media"
+                            title="Video Player"
+                            onError={() => setVideoError(true)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    
+                    <p className="text-gray-500 text-xs mt-2">
+                      {movie.stream_sources?.length || 0} streaming sources available
+                    </p>
                   </>
                 ) : (
-                  <p className="text-gray-400">No streaming sources available</p>
+                  <div className="bg-zinc-800 rounded-lg p-6 text-center">
+                    <p className="text-gray-400 mb-2">No streaming sources available for this title</p>
+                    <p className="text-gray-500 text-sm">Try a different movie from the trending list</p>
+                  </div>
                 )}
               </div>
             </div>
