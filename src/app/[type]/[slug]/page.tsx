@@ -51,6 +51,7 @@ export default function DetailPage() {
       setLoading(true);
       setError(null);
       setVideoError(false);
+      setSelectedSource(null);
       
       try {
         const endpoint = type === 'tv' ? `tv/${slug}` : `movie/${slug}`;
@@ -63,7 +64,7 @@ export default function DetailPage() {
         
         setMovie(detail);
         
-        // Set first source immediately
+        // Set first source immediately - handle both stream_sources array and flux_embed fallback
         if (detail.stream_sources && detail.stream_sources.length > 0) {
           setSelectedSource(detail.stream_sources[0]);
         } else if (detail.flux_embed) {
@@ -78,6 +79,17 @@ export default function DetailPage() {
     
     loadDetail();
   }, [type, slug]);
+
+  // Fallback: ensure selectedSource is set when we have movie data
+  useEffect(() => {
+    if (movie && !selectedSource && !loading) {
+      if (movie.stream_sources && movie.stream_sources.length > 0) {
+        setSelectedSource(movie.stream_sources[0]);
+      } else if (movie.flux_embed) {
+        setSelectedSource({ name: 'Flux', embed_url: movie.flux_embed });
+      }
+    }
+  }, [movie, selectedSource, loading]);
 
   if (!isClient) {
     return (
@@ -164,62 +176,73 @@ export default function DetailPage() {
                   </div>
                 )}
                 
+                {/* Provider buttons - show if we have stream_sources */}
                 {movie.stream_sources && movie.stream_sources.length > 0 && (
-                  <>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {movie.stream_sources.map((source, i) => (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            setSelectedSource(source);
-                            setVideoError(false);
-                          }}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                            selectedSource?.embed_url === source.embed_url 
-                              ? 'bg-red-600 text-white scale-105' 
-                              : 'bg-zinc-800 text-gray-300 hover:bg-zinc-700 hover:scale-105'
-                          }`}
-                        >
-                          {source.name}
-                        </button>
-                      ))}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {movie.stream_sources.map((source, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setSelectedSource(source);
+                          setVideoError(false);
+                        }}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                          selectedSource?.embed_url === source.embed_url 
+                            ? 'bg-red-600 text-white scale-105' 
+                            : 'bg-zinc-800 text-gray-300 hover:bg-zinc-700 hover:scale-105'
+                        }`}
+                      >
+                        {source.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Video Player - show when we have a selected source */}
+                {selectedSource && (
+                  <div className="w-full bg-black rounded-lg overflow-hidden border border-zinc-800 shadow-2xl">
+                    <div className="aspect-video w-full bg-black relative">
+                      {videoError ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 text-center p-4">
+                          <p className="text-red-400 mb-2">⚠️ Video failed to load</p>
+                          <p className="text-gray-500 text-sm mb-4">Source: {selectedSource.name}</p>
+                          <button 
+                            onClick={() => setVideoError(false)}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                          >
+                            Try Again
+                          </button>
+                        </div>
+                      ) : (
+                        <iframe
+                          key={selectedSource.embed_url}
+                          src={selectedSource.embed_url}
+                          className="w-full h-full absolute inset-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                          allowFullScreen
+                          title={`Player - ${selectedSource.name}`}
+                          style={{ border: 'none' }}
+                          onError={() => setVideoError(true)}
+                        />
+                      )}
                     </div>
-                    
-                    {/* Video Player */}
-                    {selectedSource && (
-                      <div className="w-full bg-black rounded-lg overflow-hidden border border-zinc-800 shadow-2xl">
-                        <div className="aspect-video w-full bg-black relative">
-                          {videoError ? (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 text-center p-4">
-                              <p className="text-red-400 mb-2">⚠️ Video failed to load</p>
-                              <p className="text-gray-500 text-sm mb-4">Source: {selectedSource.name}</p>
-                              <button 
-                                onClick={() => setVideoError(false)}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                              >
-                                Try Again
-                              </button>
-                            </div>
-                          ) : (
-                            <iframe
-                              key={selectedSource.embed_url}
-                              src={selectedSource.embed_url}
-                              className="w-full h-full absolute inset-0"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                              allowFullScreen
-                              title={`Player - ${selectedSource.name}`}
-                              style={{ border: 'none' }}
-                              onError={() => setVideoError(true)}
-                            />
-                          )}
-                        </div>
-                        <div className="p-3 bg-zinc-900 flex items-center justify-between">
-                          <span className="text-gray-400 text-sm">Playing via {selectedSource.name}</span>
-                          <Link href="/" className="text-red-500 hover:underline text-sm">← Back to Home</Link>
-                        </div>
-                      </div>
-                    )}
-                  </>
+                    <div className="p-3 bg-zinc-900 flex items-center justify-between">
+                      <span className="text-gray-400 text-sm">Playing via {selectedSource.name}</span>
+                      <Link href="/" className="text-red-500 hover:underline text-sm">← Back to Home</Link>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Fallback message if no sources but we have flux_embed as backup */}
+                {!hasSources && movie.flux_embed && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => setSelectedSource({ name: 'Flux', embed_url: movie.flux_embed })}
+                      className="px-4 py-2 bg-zinc-800 text-gray-300 hover:bg-zinc-700 rounded-full text-sm"
+                    >
+                      Try Flux Embed
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
