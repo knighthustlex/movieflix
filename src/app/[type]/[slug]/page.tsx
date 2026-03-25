@@ -39,6 +39,11 @@ export default function DetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<StreamSource | null>(null);
   const [videoError, setVideoError] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     async function loadDetail() {
@@ -47,26 +52,16 @@ export default function DetailPage() {
       setLoading(true);
       setError(null);
       setVideoError(false);
+      setSelectedSource(null);
       
       try {
-        // Determine the correct endpoint based on type
         let endpoint: string;
         if (type === 'tv') {
           endpoint = `tv/${slug}`;
         } else if (type === 'movie') {
           endpoint = `movie/${slug}`;
         } else {
-          // Try movie first, then tv
-          try {
-            const movieData = await fetchAPI(`movie/${slug}`);
-            if (movieData.stream_sources?.length > 0 || movieData.flux_embed) {
-              endpoint = `movie/${slug}`;
-            } else {
-              endpoint = `tv/${slug}`;
-            }
-          } catch {
-            endpoint = `movie/${slug}`;
-          }
+          endpoint = `movie/${slug}`;
         }
         
         const detail = await fetchAPI(endpoint);
@@ -78,15 +73,19 @@ export default function DetailPage() {
         
         setMovie(detail);
         
-        // Set the first available stream source
+        // Set the first available stream source IMMEDIATELY
         if (detail.stream_sources && detail.stream_sources.length > 0) {
-          setSelectedSource(detail.stream_sources[0]);
+          // Use setTimeout to ensure state update triggers re-render
+          setTimeout(() => {
+            setSelectedSource(detail.stream_sources[0]);
+          }, 0);
         } else if (detail.flux_embed) {
-          // Fallback to flux_embed if no stream_sources
-          setSelectedSource({
-            name: 'Flux',
-            embed_url: detail.flux_embed
-          });
+          setTimeout(() => {
+            setSelectedSource({
+              name: 'Flux',
+              embed_url: detail.flux_embed
+            });
+          }, 0);
         }
       } catch (err) {
         console.error('Failed to load:', err);
@@ -98,6 +97,28 @@ export default function DetailPage() {
     
     loadDetail();
   }, [type, slug]);
+
+  // Fallback: if we have movie data but no selected source, set one
+  useEffect(() => {
+    if (movie && !selectedSource && !loading) {
+      if (movie.stream_sources && movie.stream_sources.length > 0) {
+        setSelectedSource(movie.stream_sources[0]);
+      } else if (movie.flux_embed) {
+        setSelectedSource({
+          name: 'Flux',
+          embed_url: movie.flux_embed
+        });
+      }
+    }
+  }, [movie, selectedSource, loading]);
+
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-black">
+        <div className="h-[60vh] skeleton" />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -124,8 +145,9 @@ export default function DetailPage() {
     );
   }
 
-  const backdropUrl = movie.backdrop ? `https://image.tmdb.org/t/p/original${movie.backdrop}` : null;
-  const hasSources = movie.stream_sources?.length > 0 || movie.flux_embed;
+  const backdropUrl = movie.backdrop ? movie.backdrop.replace('https://image.tmdb.org/t/p/original', '') : null;
+  const posterUrl = movie.backdrop ? movie.backdrop.replace('https://image.tmdb.org/t/p/original', '/w500') : null;
+  const hasSources = (movie.stream_sources?.length > 0) || movie.flux_embed;
 
   return (
     <div className="min-h-screen bg-black">
@@ -133,7 +155,7 @@ export default function DetailPage() {
       {backdropUrl && (
         <div 
           className="fixed inset-0 bg-cover bg-center opacity-30" 
-          style={{ backgroundImage: `url(${backdropUrl})` }} 
+          style={{ backgroundImage: `url(https://image.tmdb.org/t/p/original${backdropUrl})` }} 
         />
       )}
       <div className="fixed inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
@@ -144,12 +166,14 @@ export default function DetailPage() {
           <div className="flex flex-col md:flex-row gap-8">
             {/* Poster */}
             <div className="flex-shrink-0">
-              <div className="w-64 md:w-80 rounded-lg overflow-hidden bg-zinc-800">
-                <img 
-                  src={movie.backdrop ? `https://image.tmdb.org/t/p/w500${movie.backdrop}` : '/placeholder.jpg'} 
-                  alt={movie.title} 
-                  className="w-full"
-                />
+              <div className="w-64 md:w-80 rounded-lg overflow-hidden bg-zinc-800 shadow-2xl">
+                {posterUrl && (
+                  <img 
+                    src={`https://image.tmdb.org/t/p/w500${backdropUrl}`}
+                    alt={movie.title} 
+                    className="w-full"
+                  />
+                )}
               </div>
             </div>
             
@@ -158,78 +182,86 @@ export default function DetailPage() {
               <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">{movie.title}</h1>
               <div className="flex items-center gap-4 mb-6 text-gray-400">
                 <span>{movie.year}</span>
-                {movie.runtime && <span>{movie.runtime}</span>}
-                <span className="capitalize">{movie.type}</span>
+                {movie.runtime && <span>• {movie.runtime}</span>}
+                <span className="capitalize">• {movie.type}</span>
               </div>
               
               {movie.description && (
                 <p className="text-gray-300 mb-8 max-w-2xl">{movie.description}</p>
               )}
               
-              {/* Debug info - remove in production */}
-              <p className="text-gray-500 text-xs mb-4">Slug: {movie.slug}</p>
-              
-              {/* Stream Sources */}
+              {/* Stream Sources - Always show if available */}
               <div className="mb-8">
                 <h3 className="text-xl font-semibold text-white mb-4">Watch Now</h3>
                 
-                {hasSources ? (
-                  <>
-                    {movie.stream_sources && movie.stream_sources.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {movie.stream_sources.map((source, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              setSelectedSource(source);
-                              setVideoError(false);
-                            }}
-                            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                              selectedSource?.name === source.name 
-                                ? 'bg-red-600 text-white' 
-                                : 'bg-zinc-800 text-gray-300 hover:bg-zinc-700'
-                            }`}
+                {!hasSources && (
+                  <div className="bg-zinc-800 rounded-lg p-6 text-center mb-4">
+                    <p className="text-gray-400">No streaming sources available for this title</p>
+                  </div>
+                )}
+                
+                {/* Source Buttons */}
+                {movie.stream_sources && movie.stream_sources.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {movie.stream_sources.map((source, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setSelectedSource(source);
+                          setVideoError(false);
+                        }}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                          selectedSource?.embed_url === source.embed_url 
+                            ? 'bg-red-600 text-white' 
+                            : 'bg-zinc-800 text-gray-300 hover:bg-zinc-700'
+                        }`}
+                      >
+                        {source.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Video Player - Always render when we have a source */}
+                {selectedSource && (
+                  <div className="w-full bg-black rounded-lg overflow-hidden border border-zinc-800">
+                    <div className="aspect-video w-full bg-black relative">
+                      {videoError ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 text-center p-4">
+                          <p className="text-red-400 mb-2">⚠️ Video failed to load</p>
+                          <p className="text-gray-500 text-sm mb-4">Source: {selectedSource.name}</p>
+                          <button 
+                            onClick={() => setVideoError(false)}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                           >
-                            {source.name}
+                            Try Again
                           </button>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {selectedSource && (
-                      <div className="aspect-video w-full bg-black rounded-lg overflow-hidden relative">
-                        {videoError ? (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 text-center p-4">
-                            <p className="text-red-400 mb-2">Video failed to load</p>
-                            <p className="text-gray-500 text-sm mb-4">Source: {selectedSource.name}</p>
-                            <button 
-                              onClick={() => setVideoError(false)}
-                              className="text-red-500 hover:underline"
-                            >
-                              Try again
-                            </button>
-                          </div>
-                        ) : (
-                          <iframe
-                            src={selectedSource.embed_url}
-                            className="w-full h-full"
-                            allowFullScreen
-                            allow="autoplay; fullscreen; encrypted-media"
-                            title="Video Player"
-                            onError={() => setVideoError(true)}
-                          />
-                        )}
-                      </div>
-                    )}
-                    
-                    <p className="text-gray-500 text-xs mt-2">
-                      {movie.stream_sources?.length || 0} streaming sources available
-                    </p>
-                  </>
-                ) : (
-                  <div className="bg-zinc-800 rounded-lg p-6 text-center">
-                    <p className="text-gray-400 mb-2">No streaming sources available for this title</p>
-                    <p className="text-gray-500 text-sm">Try a different movie from the trending list</p>
+                        </div>
+                      ) : (
+                        <iframe
+                          src={selectedSource.embed_url}
+                          className="w-full h-full absolute inset-0"
+                          allowFullScreen
+                          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                          title={`Player - ${selectedSource.name}`}
+                          style={{ border: 'none' }}
+                          onError={() => {
+                            console.error('Iframe failed to load');
+                            setVideoError(true);
+                          }}
+                        />
+                      )}
+                    </div>
+                    <div className="p-3 bg-zinc-900 text-center">
+                      <span className="text-gray-400 text-sm">Playing via {selectedSource.name}</span>
+                    </div>
+                  </div>
+                )}
+                
+                {!hasSources && (
+                  <div className="mt-4 p-4 bg-zinc-800 rounded-lg">
+                    <p className="text-gray-400 text-sm">Try another movie from the homepage</p>
+                    <Link href="/" className="text-red-500 hover:underline text-sm">Go to Home →</Link>
                   </div>
                 )}
               </div>
