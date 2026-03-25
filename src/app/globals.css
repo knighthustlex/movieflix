@@ -20,11 +20,10 @@ html {
 body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+    to bottom,
+    transparent,
+    rgb(var(--background-end-rgb))
+  ) rgb(var(--background-start-rgb));
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   min-height: 100vh;
 }
@@ -58,23 +57,23 @@ body {
   display: none;
 }
 
-/* Hover scale effect */
+/* Hover scale effect with smooth transition */
 .hover-scale {
-  transition: transform 0.3s ease, z-index 0s;
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), z-index 0s;
 }
 
 .hover-scale:hover {
-  transform: scale(1.05);
-  z-index: 10;
+  transform: scale(1.08);
+  z-index: 20;
 }
 
 /* Gradient overlays */
 .hero-gradient {
   background: linear-gradient(
     to top,
-    rgb(var(--background-start-rgb) / 0.9) 0%,
-    transparent 50%,
-    rgb(var(--background-start-rgb) / 0.3) 100%
+    rgb(var(--background-start-rgb) / 0.95) 0%,
+    rgb(var(--background-start-rgb) / 0.5) 40%,
+    transparent 70%
   );
 }
 
@@ -86,14 +85,65 @@ body {
   );
 }
 
-/* Fade in animation */
+/* Fade in animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.5s ease forwards;
+  animation: fadeIn 0.6s ease forwards;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.7s ease forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.5s ease forwards;
+}
+
+.animate-slide-in {
+  animation: slideInLeft 0.5s ease forwards;
 }
 
 /* Stagger children */
@@ -102,11 +152,14 @@ body {
   opacity: 0;
 }
 
-.stagger-children > *:nth-child(1) { animation-delay: 0.1s; }
-.stagger-children > *:nth-child(2) { animation-delay: 0.2s; }
-.stagger-children > *:nth-child(3) { animation-delay: 0.3s; }
-.stagger-children > *:nth-child(4) { animation-delay: 0.4s; }
-.stagger-children > *:nth-child(5) { animation-delay: 0.5s; }
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
+.stagger-children > *:nth-child(7) { animation-delay: 0.35s; }
+.stagger-children > *:nth-child(8) { animation-delay: 0.4s; }
 
 /* Image skeleton loading */
 .skeleton {
@@ -122,8 +175,8 @@ body {
 
 /* Modal backdrop */
 .modal-backdrop {
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
 }
 
 /* Hide scrollbar but keep functionality */
@@ -134,4 +187,73 @@ body {
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* Netflix red button */
+.btn-netflix {
+  background-color: var(--netflix-red);
+  transition: all 0.2s ease;
+}
+
+.btn-netflix:hover {
+  background-color: #f40612;
+  transform: scale(1.02);
+}
+
+/* Card hover glow */
+.card-glow {
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.card-glow:hover {
+  box-shadow: 0 0 20px rgba(229, 9, 20, 0.3);
+}
+
+/* Text gradient for titles */
+.text-gradient {
+  background: linear-gradient(90deg, #fff, #a3a3a3);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Smooth image load */
+img {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+img.loading {
+  opacity: 0;
+}
+
+img.loaded {
+  opacity: 1;
+}
+
+/* Navbar blur */
+.navbar-blur {
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Row scroll buttons */
+.row-button {
+  transition: opacity 0.3s ease, background-color 0.2s ease;
+}
+
+.row-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Player container */
+.player-container {
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+}
+
+/* Focus states for accessibility */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--netflix-red);
+  outline-offset: 2px;
 }
